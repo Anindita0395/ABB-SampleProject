@@ -1,0 +1,151 @@
+pool: devfactory-linux-agents #assuemed the name of an private agent pool 
+
+trigger:                          # this is use to automate trigger this pipeline execution on a code commit
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - azure-docker-build.yaml
+
+pr: none # this is used to trigger a pipeline whenever a PR is raised
+
+parameters:
+  - name: Environment
+    displayName: Select Environment to Deploy
+    type: string
+    default: DEV
+    values: 
+      - DEV
+      - QA
+      - STG
+      - PROD
+      - ALL
+
+variables:
+- group : devfactory-agents-creds  # Global variable group declaration 
+
+# this is used when we want to refer templates or scripts present in a different repo
+resources:
+  repositories:
+    - repository: template-repo
+      type: git
+      name: goverened-template-repo
+      ref: 'develop'
+
+stages:
+- stage: BuildAndPushImage
+  displayName: Build and Push Agent Image to ACR
+  condition: always()
+  jobs:
+    - job: BuildDockerImage
+      displayName: Build Docker Image
+      steps:
+      - template: azure-templates/docker-build.yml
+        parameters:
+          azureSubscription: $(azureServiceConnection)
+          keyVaultName: $(keyVaultName)
+          dockerImageName: 'azure-linux-agent'
+          acrRegistryName: 'abb-acr.azurecr.io'
+          acrUser: $(ACR_USER)
+          acrPassword: $(ACR_PASSWORD)
+          dockerFilePath: './docker' 
+- stage: DevAKSDeployment
+  displayName: deploy agents in DEV AKS cluster
+  condition: eq(parameters.Environment, 'DEV') or eq(parameters.Environment, 'ALL') 
+  variables:
+    - name: ENV               # Local variable declaration
+      value: dev
+    - group: dev-aks-deploy   # Local Variable Group declaration
+  jobs:
+    - job: AKSDeploymentDEV
+      displayName: Build Docker Image
+      steps:
+      - template: azure-templates/dev-aks-deployment-template.yml
+        parameters:
+          azureSubscription: $(azureServiceConnection)
+          keyVaultName: $(keyVaultName)
+          resourceGroup: $(resourceGroup)
+          aksClusterName: $(aksClusterName)
+          spnClientId: $(SPN_CLIENT_ID)
+          spnClientSecret: $(SPN_CLIENT_SECRET)
+          tenantId: $(TENANT_ID)
+          namespacePrefix: azureagent
+          retries: 5
+          waitTime: 30
+- stage: QAAKSDeployment
+  displayName: deploy agents in QA AKS cluster
+  condition: eq(parameters.Environment, 'QA') or eq(parameters.Environment, 'ALL') 
+  environment: QA-APPROVER
+  variables:
+    - name: ENV  # Define plain variable
+      value: qa
+    - group: qa-aks-deploy
+  jobs:
+    - job: AKSDeploymentQA
+      displayName: Build Docker Image
+      steps:
+      - template: azure-templates/dev-aks-deployment-template.yml
+        parameters:
+          azureSubscription: $(azureServiceConnection)
+          keyVaultName: $(keyVaultName)
+          resourceGroup: $(resourceGroup)
+          aksClusterName: $(aksClusterName)
+          spnClientId: $(SPN_CLIENT_ID)
+          spnClientSecret: $(SPN_CLIENT_SECRET)
+          tenantId: $(TENANT_ID)
+          namespacePrefix: azureagent
+          retries: 5
+          waitTime: 30
+- stage: STGAKSDeployment
+  displayName: deploy agents in STG AKS cluster
+  condition: eq(parameters.Environment, 'STG') or eq(parameters.Environment, 'ALL') 
+  environment: STG-APPROVER
+  variables:
+    - name: ENV  # Define plain variable
+      value: stg
+    - group: stg-aks-deploy
+  jobs:
+    - job: AKSDeploymentSTG
+      displayName: Build Docker Image
+      steps:
+      - template: azure-templates/dev-aks-deployment-template.yml
+        parameters:
+          azureSubscription: $(azureServiceConnection)
+          keyVaultName: $(keyVaultName)
+          resourceGroup: $(resourceGroup)
+          aksClusterName: $(aksClusterName)
+          spnClientId: $(SPN_CLIENT_ID)
+          spnClientSecret: $(SPN_CLIENT_SECRET)
+          tenantId: $(TENANT_ID)
+          namespacePrefix: azureagent
+          retries: 5
+          waitTime: 30
+- stage: PRODAKSDeployment
+  displayName: deploy agents in PROD AKS cluster
+  condition: eq(parameters.Environment, 'PROD') or eq(parameters.Environment, 'ALL') 
+  environment: PROD-APPROVER
+  variables:
+    - name: ENV  # Define plain variable
+      value: prod
+    - group: prod-aks-deploy
+  jobs:
+    - job: AKSDeploymentPROD
+      displayName: Build Docker Image
+      steps:
+      - template: azure-templates/dev-aks-deployment-template.yml
+        parameters:
+          azureSubscription: $(azureServiceConnection)
+          keyVaultName: $(keyVaultName)
+          resourceGroup: $(resourceGroup)
+          aksClusterName: $(aksClusterName)
+          spnClientId: $(SPN_CLIENT_ID)
+          spnClientSecret: $(SPN_CLIENT_SECRET)
+          tenantId: $(TENANT_ID)
+          namespacePrefix: azureagent
+          retries: 5
+          waitTime: 30
+
+
+
+
