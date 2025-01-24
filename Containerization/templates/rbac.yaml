@@ -1,0 +1,30 @@
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: azure-devops-agent-sa
+  namespace: {{ .Values.azureagent }}
+---
+# ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: azure-devops-agent-role
+rules:
+- apiGroups: ["*"]              # Apply to all API groups
+  resources: ["*"]              # Apply to all resources
+  verbs: ["*"]                  # Allow all actions (create, delete, update, list, etc.)
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: azure-devops-agent-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: azure-devops-agent-role  # Bind to the ClusterRole defined above
+subjects:
+- kind: ServiceAccount
+  name: azure-devops-agent-sa   # The ServiceAccount being granted permissions
+  namespace: {{ .Values.azureagent }}

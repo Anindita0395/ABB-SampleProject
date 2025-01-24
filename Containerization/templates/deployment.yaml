@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azure-linux-agent
+  namespace: {{ .Values.namespaces.azureagents }}
+  labels:
+    app: azure-linux-agent
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: azure-linux-agent
+  template:
+    metadata:
+      labels:
+        app: azure-linux-agent
+    spec:
+      serviceAccountName: azure-devops-agent-sa
+      imagePullSecrets:
+      - name: {{ .Values.acr.secretName }}
+      containers:
+      - name: azure-linux-agent
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: AZP_URL
+          value: "{{ .Values.agent.url }}"
+        - name: AZP_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.secrets.tokenSecretName }}
+              key: token
+        - name: AZP_POOL
+          value: "{{ .Values.agent.pool }}"
+        - name: AZP_AGENT_NAME
+          value: "{{ .Values.agent.agentName }}"
+        readinessProbe:
+          httpGet:
+            path: /health/readiness
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health/liveness
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10

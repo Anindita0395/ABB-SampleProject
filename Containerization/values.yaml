@@ -1,0 +1,36 @@
+# Image configuration
+image:
+  repository: abb-acr.azurecr.io/azure-devops-agent
+  tag: "#{DOCKER_TAG}#"
+  pullPolicy: IfNotPresent
+
+# Azure DevOps agent configuration
+agent:
+  url: "https://dev.azure.com/abb-demo-project"
+  token: "#{agentPAT}#"  # Optional, use secret instead
+  pool: "devfactory-linux-pool"
+  agentName: "linux-agent"
+
+# Kubernetes namespaces
+namespaces:
+  keda: "keda-#{ENV}#"
+  azureagents: "azure-agents-#{ENV}#"
+
+# KEDA configuration
+keda:
+  enabled: true
+  minReplicaCount: 2
+  maxReplicaCount: 7
+  poolID: "#{poolID}#"  # Replace with your Azure DevOps pool ID
+
+# Secrets configuration
+secrets:
+  tokenSecretName: pipeline-trigger-auth
+
+# ACR secret configuration
+acr:
+  enabled: true  # Set to false if you don’t need ACR authentication
+  secretName: "acr-secret-#{ENV}#"
+  dockerServer: abb-acr.azurecr.io  # Replace with your ACR login server (e.g., yourregistry.azurecr.io)
+  dockerUsername: "#{ACR_USER}#"   # Replace with your ACR username
+  dockerPassword: "#{ACR_PASSWORD}#"

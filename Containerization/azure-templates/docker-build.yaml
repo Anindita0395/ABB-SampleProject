@@ -1,0 +1,44 @@
+# azure-templates/docker-image-template.yml
+
+parameters:
+  azureSubscription: ''
+  keyVaultName: ''
+  dockerImageName: ''
+  acrRegistryName: ''
+  acrUser: ''
+  acrPassword: ''
+
+steps:
+  - checkout: self
+  - checkout: template-repo
+
+  - task: AzureKeyVault@2
+    displayName: Fetch Secrets from Azure Key Vault
+    inputs:
+      azureSubscription: ${{ parameters.azureSubscription }}
+      KeyVaultName: ${{ parameters.keyVaultName }}
+      SecretsFilter: '*'
+      RunAsPreJob: false
+
+  - script: |
+      TAG=$(Build.BuildId)-$(date +"%d-%m")
+      echo "##vso[task.setvariable variable=DOCKER_TAG;isOutput=true]$TAG"
+      echo "Docker image will be tagged as: $TAG"
+    displayName: Generate Dynamic Docker Tag
+
+  - script: |
+      docker build \
+        --build-arg AZP_URL=$(AZP_URL) \
+        --build-arg AZP_TOKEN=$(AZP_TOKEN) \
+        --build-arg AZP_POOL=$(AZP_POOL) \
+        --build-arg AZP_AGENT_NAME=$(AZP_AGENT_NAME) \
+        -t ${{ parameters.dockerImageName }}:$(DOCKER_TAG) ${{ parameters.dockerFilePath }}
+    displayName: Build Docker Image
+
+  - script: |
+      docker login ${{ parameters.acrRegistryName }} -u ${{ parameters.acrUser }} -p ${{ parameters.acrPassword }}
+      docker push ${{ parameters.acrRegistryName }}/${{ parameters.dockerImageName }}:$(DOCKER_TAG)
+    displayName: Push Docker Image to ACR
+    env:
+      ACR_USER: ${{ parameters.acrUser }}
+      ACR_PASSWORD: ${{ parameters.acrPassword }}

@@ -1,0 +1,17 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: azure-pipelines-scaledobject
+  namespace: {{ .Values.namespaces.azureagents }}
+spec:
+  scaleTargetRef:
+    name: azure-linux-agent
+  minReplicaCount: {{ .Values.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.keda.maxReplicaCount }}
+  triggers:
+  - type: azure-pipelines
+    metadata:
+      poolID: "{{ .Values.keda.poolID }}"
+      organizationURLFromEnv: "AZP_URL"
+    authenticationRef:
+      name: {{ .Values.secrets.tokenSecretName }}

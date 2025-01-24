@@ -1,0 +1,17 @@
+{{- if .Values.keda.enabled }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.keda }}
+---
+apiVersion: helm.sh/v1
+kind: HelmRelease
+metadata:
+  name: keda
+  namespace: {{ .Values.namespaces.keda }}
+spec:
+  chart:
+    repository: https://kedacore.github.io/charts
+    name: keda
+    version: "2.12.0"
+{{- end }}

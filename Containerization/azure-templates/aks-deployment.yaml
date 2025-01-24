@@ -1,0 +1,74 @@
+parameters:
+  azureSubscription: ''       # Subscription for Azure Key Vault
+  keyVaultName: ''            # Key Vault name
+  resourceGroup: ''           # Resource group for AKS
+  aksClusterName: ''          # AKS cluster name
+  spnClientId: ''             # Service Principal Client ID
+  spnClientSecret: ''         # Service Principal Secret
+  tenantId: ''                # Tenant ID for authentication
+  namespacePrefix: ''         # Prefix for Kubernetes namespace
+  retries: 5                  # Number of retries for helm deployment verification
+  waitTime: 30                # Time (in seconds) between retries
+
+jobs:
+- job: AKSDeploymentDEV
+  displayName: Deploy agents in AKS cluster
+  steps:
+  - task: AzureKeyVault@2
+    displayName: Fetch Secrets from Azure Key Vault
+    inputs:
+      azureSubscription: ${{ parameters.azureSubscription }}
+      KeyVaultName: ${{ parameters.keyVaultName }}
+      SecretsFilter: '*'
+      RunAsPreJob: false
+
+  - script: |
+      echo "Authenticating with Azure using Service Principal..."
+      az login --service-principal \
+        --username ${{ parameters.spnClientId }} \
+        --password ${{ parameters.spnClientSecret }} \
+        --tenant ${{ parameters.tenantId }}
+      echo "Fetching AKS credentials..."
+      az aks get-credentials --resource-group ${{ parameters.resourceGroup }} --name ${{ parameters.aksClusterName }} --overwrite-existing
+      echo "Authentication completed."
+    displayName: Authenticate with AKS
+
+  - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+    displayName: Replace Tokens in values.yaml
+    inputs:
+      targetFiles: "./values.yaml"
+      tokenPrefix: '#{'  # Use this prefix for placeholders
+      tokenSuffix: '}#'  # Use this suffix for placeholders
+      writeBOM: false
+
+  - script: |
+      helm upgrade --install azure-devops-agent ./ \
+        -f values.yaml
+    displayName: Deploy Helm Chart
+
+  - script: |
+      for ((i=1; i<=${RETRIES}; i++)); do
+        echo "Checking Helm deployment status... Attempt $i/${RETRIES}"
+        
+        if helm status ${RELEASE_NAME} -n ${NAMESPACE} | grep -q "STATUS: deployed"; then
+          if [[ $(kubectl get pods -n ${NAMESPACE} --no-headers | grep -v "Running" | wc -l) -eq 0 ]]; then
+            echo "Helm deployment successful and all pods are running."
+            exit 0
+          else
+            echo "Pods are not ready. Retrying in ${WAIT_TIME} seconds..."
+          fi
+        else
+          echo "Helm release not deployed yet. Retrying in ${WAIT_TIME} seconds..."
+        fi
+        
+        sleep ${WAIT_TIME}
+      done
+
+      echo "Helm deployment failed or pods are not ready after ${RETRIES} attempts."
+      exit 1
+    displayName: Verify Helm Deployment
+    env:
+      RELEASE_NAME: azure-devops-agent
+      NAMESPACE: ${{ parameters.namespacePrefix }}-$(ENV)
+      RETRIES: ${{ parameters.retries }}
+      WAIT_TIME: ${{ parameters.waitTime }}
