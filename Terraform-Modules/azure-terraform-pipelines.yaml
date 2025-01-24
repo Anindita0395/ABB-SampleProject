@@ -1,0 +1,64 @@
+trigger:
+  - main
+
+pool: Azure Pipelines # Using a Microsoft-hosted agent
+
+variables:
+  group: abb-terraform-deployment
+
+
+stages:
+  - stage: Terraform
+    displayName: "Terraform Deployment"
+    jobs:
+      - job: InstallAndRunTerraform
+        displayName: "Install and Execute Terraform"
+        workspace:
+          clean: all
+        steps:
+          # Authenticate and execute Terraform steps
+          - task: AzureCLI@2
+            displayName: "azure login"
+            inputs:
+              azureSubscription: azure-devops-sc-abb
+              scriptType: 'bash'
+              addSpnToEnvironment: true
+              useGlobalConfig: true
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Set az login creds
+                echo "##vso[task.setvariable variable=ARM_TENANT_ID;isOutput=true]$tenantId"
+                echo "##vso[task.setvariable variable=ARM_CLIENT_ID;isOutput=true]$servicePrincipalID"
+                echo "##vso[task.setvariable variable=ARM_CLIENT_SECRET;isOutput=true]$servicePrincipalKey"
+
+                subscription_id=$(az account list --query "[?name=='$subscription'].id" -o tsv)
+                echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID;isOutput=true]$subscription_id"
+                az account set --subscription $(ARM_SUBSCRIPTION_ID)
+                
+          - task: Bash@3
+            displayName: "Terraform Initialization"
+            inputs:
+              targetType: 'inline'
+              script: |
+                pwd 
+                terraform --version
+
+                # Navigate to the Terraform directory
+                cd terraform_directory
+
+                # Initialize Terraform
+                terraform init \
+                  -backend-config="resource_group_name=$(RESOURCE_GROUP)"
+                  -backend-config="storage_account_name=$(STORAGE_ACCOUNT_NAME)" \
+                  -backend-config="container_name=$(CONTAINER_NAME)" \
+                  -backend-config="key=$(STATE_FILE_KEY)" 
+                
+                terraform providers
+
+                # Plan Terraform changes
+                terraform plan -out=tfplan
+
+                # Apply Terraform changes
+                terraform apply -auto-approve tfplan
+
+
